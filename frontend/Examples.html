@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gali RAG — 智能知识库平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════
+       Design Tokens
+       ═══════════════════════════════════════════ */
+    :root {
+      --color-ink: #171717;
+      --color-body: #525252;
+      --color-muted: #a3a3a3;
+      --color-canvas: #ffffff;
+      --color-canvas-soft: #fafafa;
+      --color-canvas-soft-2: #f5f5f5;
+      --color-hairline: #e5e5e5;
+      --color-accent: #2563eb;
+      --color-accent-soft: #dbeafe;
+      --color-success: #16a34a;
+      --color-success-soft: #dcfce7;
+      --color-warning: #f59e0b;
+      --color-warning-soft: #fef3c7;
+      --color-error: #dc2626;
+      --color-error-soft: #fee2e2;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --radius-pill: 100px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+      --shadow-lg: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.08);
+      --sidebar-width: 260px;
+      --header-height: 64px;
+      --transition: 180ms ease;
+    }
+    /* ═══════════════════════════════════════════
+       Reset & Base
+       ═══════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      color: var(--color-ink);
+      background: var(--color-canvas-soft);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--color-accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+    /* ═══════════════════════════════════════════
+       Layout Shell
+       ═══════════════════════════════════════════ */
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr;
+      grid-template-rows: var(--header-height) 1fr;
+      grid-template-areas:
+        "sidebar header"
+        "sidebar main";
+      min-height: 100vh;
+    }
+    /* ═══════════════════════════════════════════
+       Header
+       ═══════════════════════════════════════════ */
+    .app-header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      background: var(--color-canvas);
+      border-bottom: 1px solid var(--color-hairline);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--color-muted);
+    }
+    .breadcrumb-sep { color: var(--color-hairline); }
+    .breadcrumb-current { color: var(--color-ink); font-weight: 500; }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--color-canvas-soft);
+      border: 1px solid var(--color-hairline);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--color-muted);
+      min-width: 200px;
+      transition: border-color var(--transition);
+    }
+    .header-search:hover { border-color: var(--color-muted); }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-pill);
+      background: var(--color-accent-soft);
+      color: var(--color-accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    /* ═══════════════════════════════════════════
+       Sidebar
+       ═══════════════════════════════════════════ */
+    .app-sidebar {
+      grid-area: sidebar;
+      display: flex;
+      flex-direction: column;
+      background: var(--color-canvas);
+      border-right: 1px solid var(--color-hairline);
+      padding: 20px 16px;
+      overflow-y: auto;
+    }
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--color-hairline);
+      margin-bottom: 20px;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-ink);
+      letter-spacing: -0.3px;
+    }
+    .brand-desc {
+      font-size: 11px;
+      color: var(--color-muted);
+    }
+    .nav-section {
+      margin-bottom: 24px;
+    }
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 12px;
+      margin-bottom: 6px;
+    }
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .nav-item a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      color: var(--color-body);
+      transition: all var(--transition);
+      text-decoration: none;
+    }
+    .nav-item a:hover {
+      background: var(--color-canvas-soft);
+      color: var(--color-ink);
+    }
+    .nav-item.active a {
+      background: var(--color-accent-soft);
+      color: var(--color-accent);
+      font-weight: 500;
+    }
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: var(--radius-pill);
+      background: var(--color-canvas-soft-2);
+      color: var(--color-muted);
+    }
+    .nav-item.active .nav-badge {
+      background: var(--color-accent);
+      color: white;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-hairline);
+    }
+    .sidebar-footer .nav-item a {
+      font-size: 13px;
+      color: var(--color-muted);
+    }
+    /* ═══════════════════════════════════════════
+       Main Content
+       ═══════════════════════════════════════════ */
+    .app-main {
+      grid-area: main;
+      padding: 28px 32px;
+      overflow-y: auto;
+    }
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--color-ink);
+      letter-spacing: -0.5px;
+    }
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--color-muted);
+      margin-top: 4px;
+    }
+    .page-actions {
+      display: flex;
+      gap: 10px;
+    }
+    /* ═══════════════════════════════════════════
+       Buttons
+       ═══════════════════════════════════════════ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius-sm);
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--color-ink);
+      color: white;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary {
+      background: var(--color-canvas);
+      color: var(--color-ink);
+      border: 1px solid var(--color-hairline);
+    }
+    .btn-secondary:hover { border-color: var(--color-muted); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-body);
+    }
+    .btn-ghost:hover { background: var(--color-canvas-soft); }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-hairline);
+      color: var(--color-body);
+      background: var(--color-canvas);
+    }
+    .btn-icon:hover { border-color: var(--color-muted); color: var(--color-ink); }
+    /* ═══════════════════════════════════════════
+       Stats Row
+       ═══════════════════════════════════════════ */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--color-canvas);
+      border: 1px solid var(--color-hairline);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .stat-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .stat-icon.blue  { background: var(--color-accent-soft); color: var(--color-accent); }
+    .stat-icon.green { background: var(--color-success-soft); color: var(--color-success); }
+    .stat-icon.amber { background: var(--color-warning-soft); color: var(--color-warning); }
+    .stat-icon.red   { background: var(--color-error-soft);   color: var(--color-error); }
+    .stat-trend {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+    }
+    .stat-trend.up   { background: var(--color-success-soft); color: var(--color-success); }
+    .stat-trend.down { background: var(--color-error-soft);   color: var(--color-error); }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -1px;
+      color: var(--color-ink);
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--color-muted);
+    }
+    /* ═══════════════════════════════════════════
+       Section Titles
+       ═══════════════════════════════════════════ */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-ink);
+    }
+    .section-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-accent);
+    }
+    /* ═══════════════════════════════════════════
+       Knowledge Base Cards
+       ═══════════════════════════════════════════ */
+    .kb-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kb-card {
+      background: var(--color-canvas);
+      border: 1px solid var(--color-hairline);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+    .kb-card:hover {
+      border-color: var(--color-accent);
+      box-shadow: var(--shadow-md);
+    }
+    .kb-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .kb-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .kb-icon.doc   { background: #ede9fe; color: #7c3aed; }
+    .kb-icon.web   { background: #dbeafe; color: #2563eb; }
+    .kb-icon.code  { background: #d1fae5; color: #059669; }
+    .kb-icon.faq   { background: #fef3c7; color: #d97706; }
+    .kb-status {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+    }
+    .kb-status.ready   { background: var(--color-success-soft); color: var(--color-success); }
+    .kb-status.pending { background: var(--color-warning-soft); color: var(--color-warning); }
+    .kb-status.error   { background: var(--color-error-soft);   color: var(--color-error); }
+    .kb-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-ink);
+      margin-bottom: 4px;
+    }
+    .kb-desc {
+      font-size: 13px;
+      color: var(--color-muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .kb-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--color-hairline);
+    }
+    .kb-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--color-muted);
+    }
+    .kb-meta-item .icon { font-size: 14px; }
+    /* ═══════════════════════════════════════════
+       Activity & Quick Actions
+       ═══════════════════════════════════════════ */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+    }
+    .card {
+      background: var(--color-canvas);
+      border: 1px solid var(--color-hairline);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-ink);
+      margin-bottom: 18px;
+    }
+    /* Recent Activity */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--color-canvas-soft-2);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+    .activity-dot.blue   { background: var(--color-accent); }
+    .activity-dot.green  { background: var(--color-success); }
+    .activity-dot.amber  { background: var(--color-warning); }
+    .activity-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .activity-text {
+      font-size: 13px;
+      color: var(--color-ink);
+      line-height: 1.5;
+    }
+    .activity-time {
+      font-size: 12px;
+      color: var(--color-muted);
+      margin-top: 2px;
+    }
+    /* Quick Actions */
+    .quick-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .quick-action {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--color-hairline);
+      border-radius: var(--radius-md);
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+    .quick-action:hover {
+      border-color: var(--color-accent);
+      background: var(--color-accent-soft);
+    }
+    .quick-action-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: var(--color-canvas-soft);
+    }
+    .quick-action-text {
+      flex: 1;
+    }
+    .quick-action-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-ink);
+    }
+    .quick-action-desc {
+      font-size: 12px;
+      color: var(--color-muted);
+      margin-top: 1px;
+    }
+    .quick-action-arrow {
+      color: var(--color-muted);
+      font-size: 16px;
+    }
+    /* ═══════════════════════════════════════════
+       Empty State
+       ═══════════════════════════════════════════ */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--color-canvas-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+    .empty-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-ink);
+      margin-bottom: 6px;
+    }
+    .empty-desc {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin-bottom: 18px;
+    }
+    /* ═══════════════════════════════════════════
+       Responsive
+       ═══════════════════════════════════════════ */
+    @media (max-width: 1200px) {
+      .bottom-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 960px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .kb-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "header"
+          "main";
+      }
+      .app-sidebar { display: none; }
+      .app-main { padding: 20px 16px; }
+      .stats-row { grid-template-columns: 1fr; }
+      .page-header { flex-direction: column; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- ═══════════ Sidebar ═══════════ -->
+  <aside class="app-sidebar" role="navigation" aria-label="主导航">
+    <div class="sidebar-brand">
+      <div class="brand-icon">G</div>
+      <div class="brand-text">
+        <span class="brand-name">Gali RAG</span>
+        <span class="brand-desc">智能知识库平台</span>
+      </div>
+    </div>
+    <nav class="nav-section">
+      <div class="nav-label">概览</div>
+      <ul class="nav-list">
+        <li class="nav-item active">
+          <a href="#dashboard">
+            <span class="nav-icon">◎</span>
+            工作台
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <nav class="nav-section">
+      <div class="nav-label">知识管理</div>
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="#knowledge-bases">
+            <span class="nav-icon">▦</span>
+            知识库
+            <span class="nav-badge">5</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#categories">
+            <span class="nav-icon">▤</span>
+            目录层级
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#documents">
+            <span class="nav-icon">◈</span>
+            文档管理
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <nav class="nav-section">
+      <div class="nav-label">智能应用</div>
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="#agents">
+            <span class="nav-icon">◉</span>
+            智能体
+            <span class="nav-badge">3</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#conversations">
+            <span class="nav-icon">◇</span>
+            对话测试
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#prompts">
+            <span class="nav-icon">◫</span>
+            Prompt 模板
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <nav class="nav-section">
+      <div class="nav-label">系统</div>
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="#models">
+            <span class="nav-icon">◌</span>
+            模型管理
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#settings">
+            <span class="nav-icon">⚙</span>
+            系统设置
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <div class="sidebar-footer">
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="#help">
+            <span class="nav-icon">?</span>
+            帮助文档
+          </a>
+        </li>
+      </ul>
+    </div>
+  </aside>
+  <!-- ═══════════ Header ═══════════ -->
+  <header class="app-header">
+    <div class="header-left">
+      <nav class="breadcrumb" aria-label="面包屑导航">
+        <span>Gali RAG</span>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">工作台</span>
+      </nav>
+    </div>
+    <div class="header-right">
+      <button class="header-search" aria-label="搜索">
+        <span>⌕</span>
+        <span>搜索知识库、文档…</span>
+        <kbd style="margin-left:auto;font-size:11px;padding:1px 6px;border:1px solid var(--color-hairline);border-radius:4px;color:var(--color-muted)">⌘K</kbd>
+      </button>
+      <button class="btn-icon" aria-label="通知">🔔</button>
+      <div class="avatar" aria-label="用户头像">张</div>
+    </div>
+  </header>
+  <!-- ═══════════ Main ═══════════ -->
+  <main class="app-main">
+    <!-- Page Header -->
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">工作台</h1>
+        <p class="page-subtitle">欢迎回来，张明。这是你的知识库运营概览。</p>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm">📥 导入数据</button>
+        <button class="btn btn-primary btn-sm">+ 新建知识库</button>
+      </div>
+    </header>
+    <!-- Stats -->
+    <section class="stats-row" aria-label="数据统计">
+      <article class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon blue">▦</div>
+          <span class="stat-trend up">+2 本周</span>
+        </div>
+        <div class="stat-value">5</div>
+        <div class="stat-label">知识库总数</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon green">◈</div>
+          <span class="stat-trend up">+12 本周</span>
+        </div>
+        <div class="stat-value">128</div>
+        <div class="stat-label">文档总数</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon amber">◉</div>
+          <span class="stat-trend up">+1 本周</span>
+        </div>
+        <div class="stat-value">3</div>
+        <div class="stat-label">活跃智能体</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-header">
+          <div class="stat-icon red">◇</div>
+          <span class="stat-trend down">-5% 较上周</span>
+        </div>
+        <div class="stat-value">1,024</div>
+        <div class="stat-label">今日对话数</div>
+      </article>
+    </section>
+    <!-- Knowledge Bases -->
+    <section aria-label="知识库列表">
+      <div class="section-header">
+        <h2 class="section-title">我的知识库</h2>
+        <a href="#knowledge-bases" class="section-link">查看全部 →</a>
+      </div>
+      <div class="kb-grid">
+        <article class="kb-card">
+          <div class="kb-card-header">
+            <div class="kb-icon doc">◈</div>
+            <span class="kb-status ready">已就绪</span>
+          </div>
+          <h3 class="kb-name">产品使用手册</h3>
+          <p class="kb-desc">包含产品 V3.2 所有功能模块的操作指南、常见问题解答及最佳实践。</p>
+          <div class="kb-meta">
+            <span class="kb-meta-item"><span class="icon">◈</span> 42 篇文档</span>
+            <span class="kb-meta-item"><span class="icon">▦</span> 1,260 切片</span>
+            <span class="kb-meta-item"><span class="icon">◷</span> 2 小时前更新</span>
+          </div>
+        </article>
+        <article class="kb-card">
+          <div class="kb-card-header">
+            <div class="kb-icon web">◉</div>
+            <span class="kb-status ready">已就绪</span>
+          </div>
+          <h3 class="kb-name">企业官网知识库</h3>
+          <p class="kb-desc">自动抓取官网全部页面内容，用于智能客服和售前咨询场景。</p>
+          <div class="kb-meta">
+            <span class="kb-meta-item"><span class="icon">◈</span> 86 篇文档</span>
+            <span class="kb-meta-item"><span class="icon">▦</span> 2,340 切片</span>
+            <span class="kb-meta-item"><span class="icon">◷</span> 1 天前更新</span>
+          </div>
+        </article>
+        <article class="kb-card">
+          <div class="kb-card-header">
+            <div class="kb-icon code">▦</div>
+            <span class="kb-status pending">处理中</span>
+          </div>
+          <h3 class="kb-name">技术文档库</h3>
+          <p class="kb-desc">API 文档、SDK 使用说明、架构设计文档等技术资料集合。</p>
+          <div class="kb-meta">
+            <span class="kb-meta-item"><span class="icon">◈</span> 15 篇文档</span>
+            <span class="kb-meta-item"><span class="icon">▦</span> 450 切片</span>
+            <span class="kb-meta-item"><span class="icon">◷</span> 正在处理</span>
+          </div>
+        </article>
+        <article class="kb-card">
+          <div class="kb-card-header">
+            <div class="kb-icon faq">◫</div>
+            <span class="kb-status ready">已就绪</span>
+          </div>
+          <h3 class="kb-name">客服 FAQ</h3>
+          <p class="kb-desc">整理自客服系统的高频问题及标准回答，覆盖售后、退换货等场景。</p>
+          <div class="kb-meta">
+            <span class="kb-meta-item"><span class="icon">◈</span> 320 条问答</span>
+            <span class="kb-meta-item"><span class="icon">▦</span> 640 切片</span>
+            <span class="kb-meta-item"><span class="icon">◷</span> 3 天前更新</span>
+          </div>
+        </article>
+      </div>
+    </section>
+    <!-- Bottom Grid: Activity + Quick Actions -->
+    <section class="bottom-grid">
+      <!-- Recent Activity -->
+      <article class="card">
+        <h3 class="card-title">最近动态</h3>
+        <div class="activity-list">
+          <div class="activity-item">
+            <span class="activity-dot blue"></span>
+            <div class="activity-content">
+              <p class="activity-text">知识库「产品使用手册」新增 <strong>3 篇</strong>文档，已自动完成向量化。</p>
+              <p class="activity-time">10 分钟前</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <span class="activity-dot green"></span>
+            <div class="activity-content">
+              <p class="activity-text">智能体「产品助手」完成模型切换至 <strong>GPT-4o</strong>。</p>
+              <p class="activity-time">1 小时前</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <span class="activity-dot amber"></span>
+            <div class="activity-content">
+              <p class="activity-text">知识库「技术文档库」正在处理新上传的 <strong>5 个</strong>文件。</p>
+              <p class="activity-time">2 小时前</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <span class="activity-dot blue"></span>
+            <div class="activity-content">
+              <p class="activity-text">Prompt 模板「RAG 问答助手」已更新，优化了引用格式输出。</p>
+              <p class="activity-time">昨天 18:30</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <span class="activity-dot green"></span>
+            <div class="activity-content">
+              <p class="activity-text">系统完成向量库索引优化，检索响应速度提升 <strong>15%</strong>。</p>
+              <p class="activity-time">昨天 14:00</p>
+            </div>
+          </div>
+        </div>
+      </article>
+      <!-- Quick Actions -->
+      <aside class="card">
+        <h3 class="card-title">快捷操作</h3>
+        <div class="quick-actions">
+          <a class="quick-action" href="#knowledge-bases/new">
+            <div class="quick-action-icon">▦</div>
+            <div class="quick-action-text">
+              <div class="quick-action-title">创建知识库</div>
+              <div class="quick-action-desc">上传文档或配置网页抓取</div>
+            </div>
+            <span class="quick-action-arrow">→</span>
+          </a>
+          <a class="quick-action" href="#agents/new">
+            <div class="quick-action-icon">◉</div>
+            <div class="quick-action-text">
+              <div class="quick-action-title">新建智能体</div>
+              <div class="quick-action-desc">配置模型、知识库和提示词</div>
+            </div>
+            <span class="quick-action-arrow">→</span>
+          </a>
+          <a class="quick-action" href="#chat">
+            <div class="quick-action-icon">◇</div>
+            <div class="quick-action-text">
+              <div class="quick-action-title">开始对话测试</div>
+              <div class="quick-action-desc">验证知识库检索效果</div>
+            </div>
+            <span class="quick-action-arrow">→</span>
+          </a>
+          <a class="quick-action" href="#models">
+            <div class="quick-action-icon">◌</div>
+            <div class="quick-action-text">
+              <div class="quick-action-title">配置 AI 模型</div>
+              <div class="quick-action-desc">添加或管理 LLM / Embedding</div>
+            </div>
+            <span class="quick-action-arrow">→</span>
+          </a>
+        </div>
+      </aside>
+    </section>
+  </main>
+</div>
+</body>
+</html>
