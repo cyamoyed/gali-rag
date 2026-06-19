@@ -89,6 +89,27 @@ npm run dev
 
 前端运行在 `http://localhost:5173`。
 
+## Docker 部署
+
+使用 Docker Compose 一键启动前后端：
+
+```bash
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 设置 API_KEY 等配置
+
+# 启动服务
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+```
+
+- 前端：`http://localhost:80`（Nginx 反向代理，自动转发 `/api/` 到后端）
+- 后端：`http://localhost:8000`
+
+更多部署方式（手动部署、生产环境配置）见 [部署指南](docs/deployment.md)。
+
 ## 项目结构
 
 ```
@@ -106,7 +127,10 @@ gali-rag/
 ├── docs/                # 项目文档
 ├── data/                # 运行时数据（SQLite、向量库、上传文件）
 ├── main.py              # 后端入口
-└── requirements.txt     # Python 依赖
+├── Dockerfile           # 后端 Docker 镜像
+├── docker-compose.yml   # Docker Compose 编排
+├── requirements.txt     # Python 依赖
+└── .env.example         # 环境变量模板
 ```
 
 ## 环境变量
@@ -116,13 +140,21 @@ gali-rag/
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `API_KEY` | 系统管理 API Key，留空则跳过鉴权 | `""` |
+| `CORS_ORIGINS` | CORS 允许的来源，逗号分隔，为空则允许 localhost | `""` |
 | `MAX_UPLOAD_SIZE_MB` | 单文件上传大小上限 (MB) | `50` |
 | `CHUNK_SIZE` | 文本切片长度 | `500` |
 | `CHUNK_OVERLAP` | 切片重叠长度 | `100` |
 | `DEFAULT_TOP_K` | 检索返回结果数 | `5` |
+| `BM25_TOP_N` | BM25 召回数 | `5` |
+| `VECTOR_TOP_N` | 向量召回数 | `5` |
 | `SIMILARITY_THRESHOLD` | 相似度阈值 | `0.6` |
+| `SEMANTIC_CHUNK_ENABLED` | 启用语义切片 | `false` |
+| `LLM_CHUNK_ENABLED` | 启用 LLM 辅助切片 | `false` |
+| `HNSW_M` | HNSW 索引 M 参数 | `16` |
+| `HNSW_EF_CONSTRUCTION` | HNSW 构建 ef 参数 | `200` |
+| `HNSW_EF_SEARCH` | HNSW 搜索 ef 参数 | `100` |
 
-更多配置项（HNSW 索引参数、BM25/Vector 召回数等）见 `app/core/config.py`。
+更多配置项见 `app/core/config.py`。
 
 ## 文档
 
