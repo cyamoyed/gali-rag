@@ -11,3 +11,5 @@ export { Spinner } from './Spinner';
 export { EmptyState } from './EmptyState';
 export { DropdownMenu } from './DropdownMenu';
 export { ToastContainer } from './Toast';
+export { Switch } from './Switch';
+export { Combobox } from './Combobox';

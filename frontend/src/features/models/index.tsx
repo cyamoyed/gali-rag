@@ -1,18 +1,13 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, Search, Cpu, Pencil, Trash2, Star, Zap, CheckCircle, XCircle } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { PageHeader } from '../../app/layout/PageHeader';
-import { Button, Input, Select, Textarea, Modal, Spinner, EmptyState, Badge, ConfirmModal } from '../../shared/components/ui';
+import { Button, Input, Select, Textarea, Modal, Spinner, EmptyState, Badge, ConfirmModal, Switch, Combobox } from '../../shared/components/ui';
 import { useModelStore, useUIStore } from '../../shared/stores';
 import type { AIModel, AIModelCreate } from '../../shared/types';
+import { PROVIDER_PRESETS, ALL_MODEL_TYPES, type ProviderPreset } from '../../shared/config/providers';
 
-const MODEL_TYPES = [
-  { label: 'LLM', value: 'llm' },
-  { label: 'Embedding', value: 'embedding' },
-  { label: 'Reranking', value: 'reranking' },
-  { label: 'Speech', value: 'speech' },
-  { label: 'Vision', value: 'vision' },
-];
+const MODEL_TYPES = ALL_MODEL_TYPES;
 
 const TYPE_BADGE: Record<string, 'primary' | 'info' | 'warning' | 'success' | 'default'> = {
   llm: 'primary',
@@ -289,6 +284,8 @@ function ModelFormModal({
     handleSubmit,
     control,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AIModelCreate>({
     defaultValues: {
@@ -302,40 +299,131 @@ function ModelFormModal({
     },
   });
 
+  const [isCustom, setIsCustom] = useState(false);
+  const [selectedProviderId, setSelectedProviderId] = useState('');
+
+  const watchedModelType = watch('model_type');
+  const watchedModelName = watch('model_name');
+
   useEffect(() => {
-    if (open) {
-      if (initialData) {
-        reset({
-          name: initialData.name,
-          provider: initialData.provider,
-          model_type: initialData.model_type,
-          model_name: initialData.model_name,
-          api_key: initialData.api_key,
-          base_url: initialData.base_url,
-          config: initialData.config,
-        });
-      } else {
-        reset({
-          name: '',
-          provider: '',
-          model_type: 'llm',
-          model_name: '',
-          api_key: '',
-          base_url: '',
-          config: '',
-        });
-      }
+    if (isCustom && watchedModelName) setValue('name', watchedModelName);
+  }, [isCustom, watchedModelName, setValue]);
+
+  const activePreset: ProviderPreset | undefined = !isCustom
+    ? PROVIDER_PRESETS.find((p) => p.id === selectedProviderId)
+    : undefined;
+
+  const availableModelTypes = useMemo(() => {
+    if (activePreset) {
+      return MODEL_TYPES.filter((t) => activePreset.supportedTypes.includes(t.value));
     }
-  }, [open, initialData, reset]);
+    return MODEL_TYPES;
+  }, [activePreset]);
+
+  // Determine if editing model matches a preset
+  const detectPreset = useCallback((provider: string, baseUrl: string) => {
+    const match = PROVIDER_PRESETS.find(
+      (p) => p.name === provider || p.baseUrl === baseUrl,
+    );
+    return match?.id || '';
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (initialData) {
+      const presetId = detectPreset(initialData.provider, initialData.base_url);
+      reset({
+        name: initialData.name,
+        provider: initialData.provider,
+        model_type: initialData.model_type,
+        model_name: initialData.model_name,
+        api_key: initialData.api_key,
+        base_url: initialData.base_url,
+        config: initialData.config,
+      });
+      if (presetId) {
+        setIsCustom(false);
+        setSelectedProviderId(presetId);
+      } else {
+        setIsCustom(true);
+        setSelectedProviderId('');
+      }
+    } else {
+      const defaultPreset = PROVIDER_PRESETS[0];
+      reset({
+        name: defaultPreset.models[0].label,
+        provider: defaultPreset.name,
+        model_type: 'llm',
+        model_name: defaultPreset.models[0].value,
+        api_key: '',
+        base_url: defaultPreset.base_url,
+        config: '',
+      });
+      setIsCustom(false);
+      setSelectedProviderId(defaultPreset.id);
+    }
+  }, [open, initialData, reset, detectPreset]);
+
+  const handleProviderSelect = (presetId: string) => {
+    setSelectedProviderId(presetId);
+    const preset = PROVIDER_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+
+    setValue('provider', preset.name);
+    setValue('base_url', preset.baseUrl);
+    setValue('name', preset.models[0].label);
+    setValue('model_name', preset.models[0].value);
+    const validType = preset.supportedTypes.includes(watchedModelType)
+      ? watchedModelType
+      : preset.supportedTypes[0];
+    setValue('model_type', validType as AIModelCreate['model_type']);
+  };
+
+  const handleToggleCustom = (checked: boolean) => {
+    setIsCustom(checked);
+    if (checked) {
+      setSelectedProviderId('');
+    } else {
+      const preset = PROVIDER_PRESETS[0];
+      setSelectedProviderId(preset.id);
+      setValue('provider', preset.name);
+      setValue('base_url', preset.baseUrl);
+      setValue('name', preset.models[0].label);
+      setValue('model_name', preset.models[0].value);
+      setValue('model_type', 'llm');
+    }
+  };
 
   const handleFormSubmit = async (data: AIModelCreate) => {
     try {
       await onSubmit(data);
       reset();
+      setSelectedProviderId('');
+      setIsCustom(false);
       onClose();
     } catch {
       // Error handled by store
     }
+  };
+
+  const presetSelectOptions = [
+    ...PROVIDER_PRESETS.map((p) => ({
+      label: p.name,
+      value: p.id,
+    })),
+    { label: '──────────', value: '', disabled: true },
+    { label: '自定义服务商...', value: '__custom__' },
+  ];
+
+  const handleProviderDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === '__custom__') {
+      handleToggleCustom(true);
+      return;
+    }
+    if (!val) return;
+    handleProviderSelect(val);
   };
 
   return (
@@ -359,53 +447,97 @@ function ModelFormModal({
         </>
       }
     >
-      <form className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label="模型名称"
-            placeholder="如：GPT-4o"
-            {...register('name', { required: '请输入模型名称' })}
-            error={errors.name?.message}
-          />
-          <Input
-            label="提供商"
-            placeholder="如：OpenAI"
-            {...register('provider', { required: '请输入提供商' })}
-            error={errors.provider?.message}
+      <form className="space-y-4" autoComplete="off">
+        <div className="flex items-center justify-end">
+          <Switch
+            checked={isCustom}
+            onChange={handleToggleCustom}
+            label="自定义服务商"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {isCustom ? (
+          <Input
+            label="服务商"
+            placeholder="如：vLLM"
+            autoComplete="off"
+            {...register('provider', { required: '请输入服务商' })}
+            error={errors.provider?.message}
+          />
+        ) : (
+          <Select
+            label="服务商"
+            options={presetSelectOptions}
+            value={selectedProviderId}
+            onChange={handleProviderDropdownChange}
+          />
+        )}
+
+        <Controller
+          name="model_type"
+          control={control}
+          render={({ field }) => (
+            <Select
+              label="模型类型"
+              options={availableModelTypes}
+              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+            />
+          )}
+        />
+
+        {isCustom ? (
+          <Input
+            label="模型编码"
+            placeholder="如：gpt-4o"
+            autoComplete="off"
+            {...register('model_name', { required: '请输入模型编码' })}
+            error={errors.model_name?.message}
+          />
+        ) : (
           <Controller
-            name="model_type"
+            name="model_name"
             control={control}
+            rules={{ required: '请输入模型编码' }}
             render={({ field }) => (
-              <Select
-                label="模型类型"
-                options={MODEL_TYPES}
+              <Combobox
+                label="模型编码"
+                options={activePreset?.models || []}
                 value={field.value}
-                onChange={(e) => field.onChange(e.target.value)}
+                onChange={(val) => {
+                  field.onChange(val);
+                  const matched = activePreset?.models.find((m) => m.value === val);
+                  if (matched) setValue('name', matched.label);
+                }}
+                placeholder="选择模型编码"
+                filterable={false}
+                error={errors.model_name?.message}
               />
             )}
           />
-          <Input
-            label="模型标识"
-            placeholder="如：gpt-4o"
-            {...register('model_name', { required: '请输入模型标识' })}
-            error={errors.model_name?.message}
-          />
-        </div>
+        )}
 
-        <Input
-          label="API Key"
-          type="password"
-          placeholder="请输入 API Key"
-          {...register('api_key')}
-        />
+        {(!activePreset || activePreset.requiresKey) && (
+          <>
+            <input type="text" name="dummy_user" autoComplete="username" tabIndex={-1} className="absolute opacity-0 h-0 w-0 pointer-events-none" readOnly />
+            <input type="password" name="dummy_pass" autoComplete="current-password" tabIndex={-1} className="absolute opacity-0 h-0 w-0 pointer-events-none" readOnly />
+            <Input
+              label="API Key"
+              type="password"
+              placeholder="请输入 API Key"
+              autoComplete="new-password"
+              {...register('api_key')}
+            />
+          </>
+        )}
 
         <Input
           label="Base URL"
           placeholder="如：https://api.openai.com/v1"
+          autoComplete="off"
+          readOnly={!isCustom}
+          disabled={!isCustom}
+          hint={!isCustom ? '预设服务商自动填写' : undefined}
           {...register('base_url')}
         />
 
