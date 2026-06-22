@@ -357,7 +357,7 @@ function ModelFormModal({
         model_type: 'llm',
         model_name: defaultPreset.models[0].value,
         api_key: '',
-        base_url: defaultPreset.base_url,
+        base_url: defaultPreset.baseUrl,
         config: '',
       });
       setIsCustom(false);
